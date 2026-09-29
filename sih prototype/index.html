@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ForecastBust AI | SIH26079</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #f1f5f9; color: #0f172a; height: 100vh; overflow: hidden; }
+    .app { display: grid; grid-template-columns: 270px 1fr 330px; grid-template-rows: 56px 1fr; height: 100vh; }
+    
+    header { grid-column: 1 / -1; background: #ffffff; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+    .logo { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; color: #0f172a; }
+    .logo span { background: #0f172a; color: #ffffff; padding: 3px 10px; border-radius: 4px; font-size: 0.7rem; }
+    .header-meta { font-size: 0.85rem; color: #64748b; display: flex; gap: 18px; align-items: center; }
+    .dot { width: 8px; height: 8px; background: #16a34a; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+    .sidebar { background: #ffffff; border-right: 1px solid #cbd5e1; padding: 16px; overflow-y: auto; }
+    .sidebar h3 { font-size: 0.72rem; text-transform: uppercase; color: #64748b; margin: 18px 0 10px 0; letter-spacing: 0.06em; }
+    .sidebar h3:first-child { margin-top: 0; }
+
+    .lead-btn { display: block; width: 100%; padding: 9px 12px; margin-bottom: 5px; background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; color: #0f172a; font-size: 0.88rem; cursor: pointer; text-align: left; }
+    .lead-btn:hover { background: #f1f5f9; }
+    .lead-btn.active { background: #e2e8f0; border-color: #94a3b8; color: #0f172a; font-weight: 500; }
+    .lead-btn .conf { float: right; font-size: 0.75rem; padding: 2px 7px; border-radius: 4px; background: #f1f5f9; color: #475569; }
+    .c-high { background: #dcfce7; color: #15803d; }
+    .c-med  { background: #fef9c3; color: #a16207; }
+    .c-low  { background: #fee2e2; color: #b91c1c; }
+
+    .region-item { padding: 10px 12px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; margin-bottom: 6px; cursor: pointer; }
+    .region-item:hover, .region-item.active { border-color: #94a3b8; background: #f8fafc; }
+    .region-item .name { font-weight: 500; font-size: 0.9rem; color: #0f172a; }
+    .region-item .meta { font-size: 0.75rem; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between; }
+    .badge { font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+    .b-high { background: #fee2e2; color: #b91c1c; }
+    .b-med  { background: #ffedd5; color: #c2410c; }
+    .b-low  { background: #dcfce7; color: #15803d; }
+
+    .main { position: relative; }
+    #map { height: 100%; width: 100%; background: #e2e8f0; }
+
+    .map-box { position: absolute; top: 14px; left: 14px; z-index: 1000; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 16px; max-width: 300px; font-size: 0.82rem; }
+    .map-box h4 { margin-bottom: 6px; font-size: 0.88rem; color: #0f172a; }
+    .map-box p { color: #64748b; line-height: 1.4; }
+
+    .legend { position: absolute; bottom: 20px; left: 14px; z-index: 1000; background: rgba(255,255,255,0.95); border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 0.75rem; }
+    .legend div { margin: 3px 0; display: flex; align-items: center; gap: 7px; color: #334155; }
+    .swatch { width: 14px; height: 11px; border-radius: 2px; }
+
+    .right { background: #ffffff; border-left: 1px solid #cbd5e1; padding: 16px; overflow-y: auto; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+    .card h3 { font-size: 0.88rem; margin-bottom: 12px; display: flex; justify-content: space-between; color: #0f172a; }
+    .card h3 span { font-size: 0.7rem; background: #f1f5f9; padding: 2px 7px; border-radius: 4px; color: #64748b; }
+    .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; text-align: center; }
+    .metric .val { font-size: 1.45rem; font-weight: 700; color: #0f172a; }
+    .metric .lbl { font-size: 0.7rem; color: #64748b; margin-top: 2px; }
+    .green { color: #16a34a; } .yellow { color: #d97706; } .orange { color: #ea580c; } .red { color: #dc2626; }
+
+    .drivers li { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.84rem; list-style: none; color: #334155; }
+    .bar { height: 6px; width: 70px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
+    .bar span { display: block; height: 100%; border-radius: 3px; }
+
+    .chart-box { height: 150px; }
+    .alert { background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 11px; font-size: 0.8rem; color: #b91c1c; line-height: 1.4; }
+    .btns { display: flex; gap: 8px; margin-top: 12px; }
+    .btn { flex: 1; padding: 8px; border-radius: 6px; border: none; font-size: 0.8rem; font-weight: 500; cursor: pointer; }
+    .btn-blue { background: #0f172a; color: white; }
+    .btn-gray { background: #ffffff; border: 1px solid #cbd5e1; color: #0f172a; }
+
+    .leaflet-container { background: #e2e8f0; }
+    .leaflet-popup-content-wrapper { background: #ffffff; color: #0f172a; border-radius: 6px; border: 1px solid #e2e8f0; }
+    .leaflet-popup-tip { background: #ffffff; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo">ForecastBust AI <span>SIH26079</span></div>
+      <div class="header-meta">
+        <span><span class="dot"></span>Live Prototype</span>
+        <span>NCMRWF · MoES</span>
+        <span id="clock">--</span>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <h3>Lead Time</h3>
+      <div id="leads"></div>
+      <h3>Hotspot Regions</h3>
+      <div id="regions"></div>
+      <h3>Model Info</h3>
+      <div style="font-size:0.8rem;color:#64748b;line-height:1.5">
+        Base Model: NCMRWF GFS<br>
+        AI Layer: Pattern Similarity + Error Climatology<br>
+        Training: 2015–2025 reforecasts<br>
+        <span style="color:#94a3b8">Prototype · Demo data</span>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="map"></div>
+      <div class="map-box">
+        <h4><span id="dayLabel">Day 3</span> · Confidence Map</h4>
+        <p id="desc">Click a region or lead time to explore forecast confidence.</p>
+      </div>
+      <div class="legend">
+        <div><div class="swatch" style="background:#16a34a"></div> High (&gt;75%)</div>
+        <div><div class="swatch" style="background:#d97706"></div> Medium (50–75%)</div>
+        <div><div class="swatch" style="background:#ea580c"></div> Low (30–50%)</div>
+        <div><div class="swatch" style="background:#dc2626"></div> Very Low (&lt;30%)</div>
+      </div>
+    </main>
+
+    <aside class="right">
+      <div class="card">
+        <h3>Selected Region <span id="regName">All India</span></h3>
+        <div class="metrics">
+          <div class="metric"><div class="val red" id="bust">42%</div><div class="lbl">Bust Probability</div></div>
+          <div class="metric"><div class="val yellow" id="conf">58%</div><div class="lbl">Confidence Score</div></div>
+          <div class="metric"><div class="val orange" id="rmse">3.8</div><div class="lbl">Expected RMSE</div></div>
+          <div class="metric"><div class="val green" id="lead">D+3</div><div class="lbl">Lead Time</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Explainable Drivers</h3>
+        <ul class="drivers" id="drivers"></ul>
+      </div>
+      <div class="card">
+        <h3>Confidence by Lead Time</h3>
+        <div class="chart-box"><canvas id="chart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>Operational Alert</h3>
+        <div class="alert" id="alert">Elevated Risk: Western Disturbance + Monsoon trough interaction may degrade Day 3–5 rainfall skill.</div>
+        <div class="btns">
+          <button class="btn btn-blue" onclick="exportBrief()">Export Brief</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    let regions =[];
+    const polys = {
+      nw:[[32.5,74],[31,76],[30,78],[28,79],[26.5,77],[27,74],[29,72],[31,72],[32.5,74]],
+      ne:[[28,89],[28,95],[26,96],[24,93],[24,91],[25.5,89],[28,89]],
+      ci:[[26,76],[26,82],[24,84],[21,83],[20,78],[21,75],[24,74],[26,76]],
+      wi:[[23,68],[23,74],[20,74],[18,73],[16,73],[17,70],[20,68],[23,68]],
+      si:[[16,74],[16,80],[12,80],[8,77],[9,76],[12,74],[16,74]],
+      ei:[[26,84],[26,88],[24,88],[21,87],[21,85],[23,84],[26,84]]
+    };
+
+    let lead = 3, sel = null, map, layers = [], chart;
+
+    function color(c) {
+      if (c >= 75) return '#16a34a';
+      if (c >= 50) return '#d97706';
+      if (c >= 30) return '#ea580c';
+      return '#dc2626';
+    }
+
+    function renderLeads() {
+      const box = document.getElementById('leads');
+      box.innerHTML = '';
+      for (let d = 1; d <= 10; d++) {
+        const avg = Math.round(regions.reduce((s, r) => s + r.conf[d], 0) / regions.length);
+        const cls = avg >= 75 ? 'c-high' : avg >= 50 ? 'c-med' : 'c-low';
+        const btn = document.createElement('button');
+        btn.className = 'lead-btn' + (d === lead ? ' active' : '');
+        btn.innerHTML = 'Day ' + d + ' <span class="conf ' + cls + '">' + avg + '%</span>';
+        btn.onclick = function() { lead = d; update(); };
+        box.appendChild(btn);
+      }
+    }
+
+    function renderRegions() {
+      const box = document.getElementById('regions');
+      box.innerHTML = '';
+      regions.forEach(function(r) {
+        const b = r.bust[lead];
+        const badge = b >= 45 ? 'b-high' : b >= 25 ? 'b-med' : 'b-low';
+        const txt = b >= 45 ? 'HIGH' : b >= 25 ? 'MED' : 'LOW';
+        const div = document.createElement('div');
+        div.className = 'region-item' + (sel && sel.id === r.id ? ' active' : '');
+        div.innerHTML = '<div class="name">' + r.name + '</div><div class="meta"><span>Bust: ' + b + '%</span><span class="badge ' + badge + '">' + txt + '</span></div>';
+        div.onclick = function() { sel = r; update(); };
+        box.appendChild(div);
+      });
+    }
+
+    function initMap() {
+      map = L.map('map', { center: [22.5, 79], zoom: 5, zoomControl: true, attributionControl: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
+    }
+
+    function updateMap() {
+      layers.forEach(function(l) { map.removeLayer(l); });
+      layers = [];
+      regions.forEach(function(r) {
+        const c = r.conf[lead];
+        const col = color(c);
+        const poly = L.polygon(polys[r.id], {
+          color: col, weight: 2, fillColor: col,
+          fillOpacity: (sel && sel.id !== r.id) ? 0.15 : 0.45
+        }).addTo(map);
+        poly.bindPopup('<b>' + r.name + '</b><br>Confidence: ' + c + '%<br>Bust: ' + r.bust[lead] + '%<br>Day ' + lead);
+        poly.on('click', function() { sel = r; update(); });
+        layers.push(poly);
+        const m = L.circleMarker([r.lat, r.lng], {
+          radius: 7, fillColor: col, color: '#fff', weight: 1.5, fillOpacity: 0.9
+        }).addTo(map);
+        layers.push(m);
+      });
+    }
+
+    function updateMetrics() {
+      const d = lead;
+      if (sel) {
+        document.getElementById('regName').textContent = sel.name;
+        document.getElementById('bust').textContent = sel.bust[d] + '%';
+        document.getElementById('bust').className = 'val ' + (sel.bust[d] >= 45 ? 'red' : sel.bust[d] >= 25 ? 'orange' : 'green');
+        document.getElementById('conf').textContent = sel.conf[d] + '%';
+        document.getElementById('conf').className = 'val ' + (sel.conf[d] >= 75 ? 'green' : sel.conf[d] >= 50 ? 'yellow' : 'red');
+        document.getElementById('rmse').textContent = (2.1 + (100 - sel.conf[d]) / 25).toFixed(1);
+        document.getElementById('lead').textContent = 'D+' + d;
+        document.getElementById('alert').textContent = sel.alert;
+        document.getElementById('desc').textContent = sel.alert;
+      } else {
+        const ab = Math.round(regions.reduce((s, r) => s + r.bust[d], 0) / regions.length);
+        const ac = Math.round(regions.reduce((s, r) => s + r.conf[d], 0) / regions.length);
+        document.getElementById('regName').textContent = 'All India';
+        document.getElementById('bust').textContent = ab + '%';
+        document.getElementById('bust').className = 'val ' + (ab >= 40 ? 'red' : 'orange');
+        document.getElementById('conf').textContent = ac + '%';
+        document.getElementById('conf').className = 'val ' + (ac >= 70 ? 'green' : 'yellow');
+        document.getElementById('rmse').textContent = (2.4 + (100 - ac) / 28).toFixed(1);
+        document.getElementById('lead').textContent = 'D+' + d;
+        document.getElementById('alert').textContent = 'Day ' + d + ' shows elevated bust risk over Northwest & Central India.';
+        document.getElementById('desc').textContent = 'National view. Select a region or change lead time.';
+      }
+      document.getElementById('dayLabel').textContent = 'Day ' + d;
+    }
+
+    function updateDrivers() {
+      const list = document.getElementById('drivers');
+      const dr = sel ? sel.drivers : [
+        {n:'Monsoon depression uncertainty',i:0.78},
+        {n:'Western Disturbance interaction',i:0.69},
+        {n:'Low-level moisture flux',i:0.61},
+        {n:'Model convective scheme bias',i:0.54}
+      ];
+      list.innerHTML = dr.map(function(x) {
+        const col = x.i > 0.7 ? '#dc2626' : x.i > 0.5 ? '#ea580c' : '#d97706';
+        return '<li><span>' + x.n + '</span><div style="display:flex;align-items:center;gap:7px"><div class="bar"><span style="width:' + (x.i*100) + '%;background:' + col + '"></span></div><span style="font-size:0.75rem;color:#64748b;width:26px;text-align:right">' + Math.round(x.i*100) + '</span></div></li>';
+      }).join('');
+    }
+
+    function updateChart() {
+      const labels = [1,2,3,4,5,6,7,8,9,10].map(function(d) { return 'D' + d; });
+      let confs, busts;
+      if (sel) {
+        confs = labels.map(function(_, i) { return sel.conf[i+1]; });
+        busts = labels.map(function(_, i) { return sel.bust[i+1]; });
+      } else {
+        confs = labels.map(function(_, i) { return Math.round(regions.reduce(function(s, r) { return s + r.conf[i+1]; }, 0) / regions.length); });
+        busts = labels.map(function(_, i) { return Math.round(regions.reduce(function(s, r) { return s + r.bust[i+1]; }, 0) / regions.length); });
+      }
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('chart'), {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Confidence %', data: confs, borderColor: '#0f172a', backgroundColor: 'rgba(15,23,42,0.06)', fill: true, tension: 0.3, pointRadius: 3 },
+            { label: 'Bust Prob %', data: busts, borderColor: '#dc2626', borderDash: [4,4], tension: 0.3, pointRadius: 3 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#64748b', boxWidth: 12, font: { size: 11 } } } },
+          scales: {
+            x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#e2e8f0' } },
+            y: { min: 0, max: 100, ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#e2e8f0' } }
+          }
+        }
+      });
+    }
+
+    function update() {
+      renderLeads();
+      renderRegions();
+      updateMap();
+      updateMetrics();
+      updateDrivers();
+      updateChart();
+    }
+
+    function reset() {
+      sel = null;
+      lead = 3;
+      update();
+      map.setView([22.5, 79], 5);
+    }
+function exportBrief() {
+  const g = id => document.getElementById(id).textContent;
+  let text = 'ForecastBust AI - Forecast Brief\n';
+  text += 'Generated: ' + new Date().toLocaleString('en-IN') + '\n\n';
+  text += 'Region: ' + g('regName') + '\n';
+  text += 'Lead Time: ' + g('lead') + '\n';
+  text += 'Bust Probability: ' + g('bust') + '\n';
+  text += 'Confidence Score: ' + g('conf') + '\n';
+  text += 'Expected RMSE: ' + g('rmse') + '\n\n';
+  text += 'Top Drivers:\n';
+  document.querySelectorAll('#drivers li').forEach(function(li, i) {
+    text += (i + 1) + '. ' + li.children[0].textContent + ' (' + li.children[1].textContent + ')\n';
+  });
+  text += '\nAlert: ' + g('alert') + '\n';
+
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'forecast-brief.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+  async function loadData() {
+  try {
+    const ids = ['nw','ne','ci','wi','si','ei'];
+    const res = await Promise.all(
+      ids.map(id => fetch('/api/region/' + id).then(r => r.json()))
+    );
+    regions = res.map(r => ({
+      id: r.id, name: r.name, lat: r.lat, lng: r.lng,
+      bust: r.bust_series, conf: r.confidence_series,
+      drivers: r.drivers.map(x => ({ n: x.name, i: x.impact })),
+      alert: r.alert
+    }));
+    initMap();
+    update();
+  } catch (e) {
+    console.log("Backend error", e);
+  }
+}
+loadData();
+    setInterval(function() {
+      document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false });
+    }, 1000);
+  </script>
+</body>
+</html>
